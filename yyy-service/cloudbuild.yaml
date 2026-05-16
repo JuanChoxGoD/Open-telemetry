@@ -1,0 +1,28 @@
+steps:
+  # 1. Construir la imagen de yyy-service
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/yyy-service:$COMMIT_SHA', '.']
+
+  # 2. Hacer push de yyy-service a Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/yyy-service:$COMMIT_SHA']
+
+  # 3. Desplegar yyy-service en Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'yyy-service'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/yyy-service:$COMMIT_SHA'
+      - '--region'
+      - 'us-central1'
+      - '--allow-unauthenticated'
+      - '--set-env-vars=OTEL_SERVICE_NAME=yyy-service,OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp.nr-data.net:4317,NEW_RELIC_LICENSE_KEY=${_NEW_RELIC_LICENSE_KEY}'
+
+images:
+  - 'gcr.io/$PROJECT_ID/yyy-service:$COMMIT_SHA'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

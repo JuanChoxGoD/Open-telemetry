@@ -1,0 +1,60 @@
+name: Deploy OpenTelemetry Microservices to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: us-central1
+  XXX_SERVICE: xxx-service
+  YYY_SERVICE: yyy-service
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Authorize Docker push
+        run: gcloud auth configure-docker ${REGION}-docker.pkg.dev
+
+      - name: Build and Push yyy-service
+        run: |
+          IMAGE_PATH="${REGION}-docker.pkg.dev/${PROJECT_ID}/otel-repo/${YYY_SERVICE}:${GITHUB_SHA}"
+          docker build -t $IMAGE_PATH ./yyy-service
+          docker push $IMAGE_PATH
+
+      - name: Build and Push xxx-service
+        run: |
+          IMAGE_PATH="${REGION}-docker.pkg.dev/${PROJECT_ID}/otel-repo/${XXX_SERVICE}:${GITHUB_SHA}"
+          docker build -t $IMAGE_PATH ./xxx-service
+          docker push $IMAGE_PATH
+
+      - name: Deploy yyy-service to Cloud Run
+        run: |
+          gcloud run deploy ${YYY_SERVICE} \
+            --image ${REGION}-docker.pkg.dev/${PROJECT_ID}/otel-repo/${YYY_SERVICE}:${GITHUB_SHA} \
+            --region ${REGION} \
+            --allow-unauthenticated \
+            --set-env-vars="OTEL_SERVICE_NAME=${YYY_SERVICE},OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp.nr-data.net:4317"
+
+      # Note: For xxx-service you would ideally pass the YYY_SERVICE URL dynamically
+      - name: Deploy xxx-service to Cloud Run
+        run: |
+          gcloud run deploy ${XXX_SERVICE} \
+            --image ${REGION}-docker.pkg.dev/${PROJECT_ID}/otel-repo/${XXX_SERVICE}:${GITHUB_SHA} \
+            --region ${REGION} \
+            --allow-unauthenticated \
+            --set-env-vars="OTEL_SERVICE_NAME=${XXX_SERVICE},OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp.nr-data.net:4317,YYY_SERVICE_URL=https://yyy-service-URL"
