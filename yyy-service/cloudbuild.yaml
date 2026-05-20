@@ -33,4 +33,4 @@ substitutions:
   _DB_PASSWORD: 'app1234'                # ⚠️ Cámbialo con tu contraseña real
   _DB_NAME: 'yyy_service'
   _DB_PORT: '3306'
-  _NEW_RELIC_LICENSE_KEY: 'a8908058fe6dd101959a54874d2dcee334c3NRAL'      # Tu key aquí
+  _NEW_RELIC_LICENSE_KEY: 'df57a42f9fce6a390d69e69f181fd5e85deeNRAL'      # Tu key aquí
