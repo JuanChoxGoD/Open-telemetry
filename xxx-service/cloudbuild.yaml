@@ -19,7 +19,7 @@ steps:
       - '--region'
       - 'us-central1'
       - '--allow-unauthenticated'
-      - '--set-env-vars=OTEL_SERVICE_NAME=xxx-service,OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp.nr-data.net:4317,NEW_RELIC_LICENSE_KEY=${_NEW_RELIC_LICENSE_KEY},YYY_SERVICE_URL=https://yyy-service-URL'
+      - '--set-env-vars=OTEL_SERVICE_NAME=xxx-service,OTEL_EXPORTER_OTLP_ENDPOINT=otlp.nr-data.net:4317,NEW_RELIC_LICENSE_KEY=${_NEW_RELIC_LICENSE_KEY},YYY_SERVICE_URL=https://yyy-service-URL'
 
 images:
   - 'gcr.io/$PROJECT_ID/xxx-service:$COMMIT_SHA'

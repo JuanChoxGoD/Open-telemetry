@@ -2,42 +2,80 @@ receivers:
   otlp:
     protocols:
       grpc:
-        endpoint: 0.0.0.0:4317
+        endpoint: 0.0.0.0:4317   
       http:
-        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins:
+          - http://*
+          - https://*
+        endpoint: 0.0.0.0:4318   
 
 processors:
   batch:
-    timeout: 1s
-    send_batch_size: 1024
+    send_batch_max_size: 200
+    send_batch_size: 200
+    timeout: 5s
+
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 65
+    spike_limit_percentage: 20
+
+  resourcedetection:
+    detectors: [gcp]
+    timeout: 10s
 
 exporters:
-  # Local Jaeger exporter
-  otlp/jaeger:
-    endpoint: "jaeger:4317"
-    tls:
-      insecure: true
-
-  # New Relic exporter
   otlp/newrelic:
-    endpoint: "https://otlp.nr-data.net:4317" # Use https://otlp.eu01.nr-data.net:4317 for EU accounts
+    endpoint: otlp.nr-data.net:4317  
     headers:
-      api-key: "${NEW_RELIC_LICENSE_KEY}"
+      api-key: "${env:NEW_RELIC_LICENSE_KEY}"  
+    compression: gzip
 
-  logging:
-    verbosity: detailed
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133   
 
 service:
+  extensions:
+  - health_check
   pipelines:
-    traces:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [otlp/jaeger, otlp/newrelic, logging]
-    metrics:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [otlp/newrelic, logging]
     logs:
-      receivers: [otlp]
-      processors: [batch]
-      exporters: [otlp/newrelic, logging]
+      receivers:
+      - otlp
+      processors:
+      - resourcedetection
+      - memory_limiter
+      - batch
+      exporters:
+      - otlp/newrelic
+
+    metrics:
+      receivers:
+      - otlp
+      processors:
+      - resourcedetection
+      - memory_limiter
+      - batch
+      exporters:
+      - otlp/newrelic
+
+    traces:
+      receivers:
+      - otlp
+      processors:
+      - resourcedetection
+      - memory_limiter
+      - batch
+      exporters:
+      - otlp/newrelic
+
+  telemetry:
+    metrics:
+      readers:
+        - periodic:
+            exporter:
+              otlp:
+                protocol: grpc
+                endpoint: localhost:4317   
+                insecure: true

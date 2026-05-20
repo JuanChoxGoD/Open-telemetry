@@ -25,14 +25,20 @@ resource = Resource(attributes={
 
 # Setup Tracing
 provider = TracerProvider(resource=resource)
-otlp_endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
-processor = BatchSpanProcessor(GrpcSpanExporter(endpoint=otlp_endpoint, insecure=True))
+otlp_endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "otlp.nr-data.net:4317")
+
+nr_license_key = os.environ.get("NEW_RELIC_LICENSE_KEY", "")
+headers = (("api-key", nr_license_key),)
+
+span_exporter = GrpcSpanExporter(endpoint=otlp_endpoint, insecure=False, headers=headers)
+processor = BatchSpanProcessor(span_exporter)
 provider.add_span_processor(processor)
 trace.set_tracer_provider(provider)
 tracer = trace.get_tracer(__name__)
 
 # Setup Metrics
-metric_reader = PeriodicExportingMetricReader(GrpcMetricExporter(endpoint=otlp_endpoint, insecure=True))
+metric_exporter = GrpcMetricExporter(endpoint=otlp_endpoint, insecure=False, headers=headers)
+metric_reader = PeriodicExportingMetricReader(metric_exporter)
 meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
 metrics.set_meter_provider(meter_provider)
 
