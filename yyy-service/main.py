@@ -5,7 +5,6 @@ import random
 import time
 from fastapi import FastAPI, HTTPException, Request
 
-# OpenTelemetry Imports
 from opentelemetry import trace, metrics
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
