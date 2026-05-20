@@ -1,6 +1,6 @@
 import os
 import logging
-import sqlite3
+import pymysql
 import random
 import time
 from fastapi import FastAPI, HTTPException, Request
@@ -16,7 +16,7 @@ from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExp
 from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.instrumentation.sqlite3 import SQLite3Instrumentor
+from opentelemetry.instrumentation.pymysql import PyMySQLInstrumentor
 from opentelemetry.instrumentation.logging import LoggingInstrumentor
 
 # Setup Resource
@@ -42,20 +42,53 @@ LoggingInstrumentor().instrument(set_logging_format=True)
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# Setup SQLite
-db_path = "history.db"
-conn = sqlite3.connect(db_path, check_same_thread=False)
-cursor = conn.cursor()
-cursor.execute("CREATE TABLE IF NOT EXISTS user_history (user_id INTEGER, orders_count INTEGER)")
-cursor.execute("INSERT INTO user_history (user_id, orders_count) VALUES (1, 5)")
-cursor.execute("INSERT INTO user_history (user_id, orders_count) VALUES (2, 10)")
-conn.commit()
+# Setup Cloud SQL Connection
+def get_db_connection():
+    """Crea una conexión a Cloud SQL"""
+    connection = pymysql.connect(
+        host=os.environ.get("DB_HOST", "127.0.0.1"),
+        user=os.environ.get("DB_USER", "root"),
+        password=os.environ.get("DB_PASSWORD", ""),
+        database=os.environ.get("DB_NAME", "yyy_service"),
+        port=int(os.environ.get("DB_PORT", "3306")),
+        charset="utf8mb4",
+        cursorclass=pymysql.cursors.DictCursor
+    )
+    return connection
+
+# Initialize database table
+def init_db():
+    """Inicializa la tabla en Cloud SQL"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_history (
+                user_id INT PRIMARY KEY,
+                orders_count INT NOT NULL
+            )
+        """)
+        
+        conn.commit()
+        logger.info("Tabla user_history creada/verificada exitosamente")
+        cursor.close()
+        conn.close()
+    except pymysql.Error as e:
+        logger.error(f"Error inicializando la base de datos: {str(e)}")
+        raise
+
+# Initialize database on startup
+try:
+    init_db()
+except Exception as e:
+    logger.error(f"No se pudo inicializar la base de datos: {str(e)}")
 
 app = FastAPI()
 
-# Auto-instrument FastAPI and SQLite
+# Auto-instrument FastAPI and PyMySQL
 FastAPIInstrumentor.instrument_app(app)
-SQLite3Instrumentor().instrument()
+PyMySQLInstrumentor().instrument()
 
 @app.get("/history/{user_id}")
 async def get_history(user_id: int, request: Request):
@@ -70,9 +103,13 @@ async def get_history(user_id: int, request: Request):
         time.sleep(sleep_time)
         span.set_attribute("simulated_latency_seconds", sleep_time)
         
+        conn = None
         try:
             # Query the database
-            cursor.execute("SELECT orders_count FROM user_history WHERE user_id = ?", (user_id,))
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT orders_count FROM user_history WHERE user_id = %s", (user_id,))
             result = cursor.fetchone()
             
             if not result:
@@ -85,14 +122,18 @@ async def get_history(user_id: int, request: Request):
                 logger.info(f"Usuario {user_id} sin historial previo")
                 return {"user_id": user_id, "previous_orders": 0}
             
-            logger.info(f"Historial encontrado: {result[0]} órdenes previas")
-            return {"user_id": user_id, "previous_orders": result[0]}
+            orders_count = result.get("orders_count") if isinstance(result, dict) else result[0]
+            logger.info(f"Historial encontrado: {orders_count} órdenes previas")
+            return {"user_id": user_id, "previous_orders": orders_count}
             
-        except sqlite3.Error as e:
+        except pymysql.Error as e:
             span.record_exception(e)
             span.set_status(trace.status.Status(trace.status.StatusCode.ERROR, str(e)))
             logger.error(f"Error de Base de Datos: {str(e)}")
             raise HTTPException(status_code=500, detail="Database Error")
+        finally:
+            if conn:
+                conn.close()
 
 @app.get("/health")
 def health_check():
