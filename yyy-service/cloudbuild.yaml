@@ -2,11 +2,11 @@ steps:
   # 1. Construir la imagen de yyy-service
   - name: 'gcr.io/cloud-builders/docker'
     args: ['build', '-t', 'gcr.io/$PROJECT_ID/yyy-service:$COMMIT_SHA', '.']
-
+  
   # 2. Hacer push de yyy-service a Container Registry
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'gcr.io/$PROJECT_ID/yyy-service:$COMMIT_SHA']
-
+  
   # 3. Desplegar yyy-service en Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
@@ -19,10 +19,18 @@ steps:
       - '--region'
       - 'us-central1'
       - '--allow-unauthenticated'
-      - '--set-env-vars=OTEL_SERVICE_NAME=yyy-service,OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp.nr-data.net:4317,NEW_RELIC_LICENSE_KEY=${_NEW_RELIC_LICENSE_KEY}'
+      - '--set-env-vars=DB_HOST=${_DB_HOST},DB_USER=${_DB_USER},DB_PASSWORD=${_DB_PASSWORD},DB_NAME=${_DB_NAME},DB_PORT=${_DB_PORT},OTEL_SERVICE_NAME=yyy-service,OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp.nr-data.net:4317,NEW_RELIC_LICENSE_KEY=${_NEW_RELIC_LICENSE_KEY}'
 
 images:
   - 'gcr.io/$PROJECT_ID/yyy-service:$COMMIT_SHA'
 
 options:
-  logging: CLOUD_LOGGING_ONLY
+  logging: CLOUD_LOGGING_ONLY 
+
+substitutions:
+  _DB_HOST: '127.0.0.1'           # Será sobrescrito en el comando
+  _DB_USER: 'appuser'
+  _DB_PASSWORD: 'app1234'                # ⚠️ Cámbialo con tu contraseña real
+  _DB_NAME: 'yyy_service'
+  _DB_PORT: '3306'
+  _NEW_RELIC_LICENSE_KEY: 'a8908058fe6dd101959a54874d2dcee334c3NRAL'      # Tu key aquí
