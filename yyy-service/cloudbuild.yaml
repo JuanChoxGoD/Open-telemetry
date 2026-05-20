@@ -28,7 +28,7 @@ options:
   logging: CLOUD_LOGGING_ONLY 
 
 substitutions:
-  _DB_HOST: '127.0.0.1'           # Será sobrescrito en el comando
+  _DB_HOST: '35.232.106.223'           # Será sobrescrito en el comando
   _DB_USER: 'appuser'
   _DB_PASSWORD: 'app1234'                # ⚠️ Cámbialo con tu contraseña real
   _DB_NAME: 'yyy_service'
