@@ -58,10 +58,21 @@ def get_db_connection():
 # Initialize database table
 def init_db():
     """Inicializa la tabla en Cloud SQL"""
+    conn = None
     try:
+        logger.info("="*60)
+        logger.info("Iniciando inicialización de base de datos...")
+        logger.info(f"  - Host: {os.environ.get('DB_HOST', '127.0.0.1')}")
+        logger.info(f"  - Base de datos: {os.environ.get('DB_NAME', 'yyy_service')}")
+        logger.info(f"  - Puerto: {os.environ.get('DB_PORT', '3306')}")
+        
+        logger.info("Intentando conectar a la base de datos...")
         conn = get_db_connection()
+        logger.info("✓ Conexión exitosa a la base de datos")
+        
         cursor = conn.cursor()
         
+        logger.info("Verificando/creando tabla user_history...")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS user_history (
                 user_id INT PRIMARY KEY,
@@ -70,18 +81,44 @@ def init_db():
         """)
         
         conn.commit()
-        logger.info("Tabla user_history creada/verificada exitosamente")
+        logger.info("✓ Tabla user_history creada/verificada exitosamente")
+        logger.info("="*60)
         cursor.close()
-        conn.close()
-    except pymysql.Error as e:
-        logger.error(f"Error inicializando la base de datos: {str(e)}")
+        
+    except pymysql.err.ProgrammingError as e:
+        logger.error(f"✗ Error de sintaxis SQL: {str(e)}")
         raise
+    except pymysql.err.OperationalError as e:
+        logger.error(f"✗ Error operacional (conexión/acceso): {str(e)}")
+        logger.error(f"  - Código: {e.args[0] if e.args else 'N/A'}")
+        raise
+    except pymysql.Error as e:
+        logger.error(f"✗ Error de PyMySQL: {str(e)}")
+        logger.error(f"  - Código: {e.args[0] if e.args else 'N/A'}")
+        raise
+    except Exception as e:
+        logger.error(f"✗ Error inesperado: {str(e)}")
+        raise
+    finally:
+        if conn:
+            try:
+                conn.close()
+                logger.info("Conexión a la base de datos cerrada")
+            except Exception as e:
+                logger.error(f"Error cerrando la conexión: {str(e)}")
 
 # Initialize database on startup
+logger.info("="*60)
+logger.info("Iniciando aplicación yyy-service")
+logger.info("="*60)
+
 try:
     init_db()
+    logger.info("✓ Base de datos inicializada correctamente")
 except Exception as e:
-    logger.error(f"No se pudo inicializar la base de datos: {str(e)}")
+    logger.critical(f"✗ CRÍTICO: No se pudo inicializar la base de datos")
+    logger.critical(f"  Error: {str(e)}")
+    logger.critical("La aplicación continuará, pero fallará al intentar acceder a la BD")
 
 app = FastAPI()
 
