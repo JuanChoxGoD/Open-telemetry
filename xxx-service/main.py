@@ -54,7 +54,13 @@ app = FastAPI()
 FastAPIInstrumentor.instrument_app(app)
 RequestsInstrumentor().instrument()
 
-YYY_SERVICE_URL = os.environ.get("YYY_SERVICE_URL", "http://localhost:8081")
+# Configure YYY_SERVICE_URL - For Cloud Run use full HTTPS URL
+YYY_SERVICE_URL = os.environ.get("YYY_SERVICE_URL", "http://localhost:8001")
+
+logger.info("="*60)
+logger.info("Iniciando aplicación xxx-service")
+logger.info(f"YYY_SERVICE_URL configurado como: {YYY_SERVICE_URL}")
+logger.info("="*60)
 
 class OrderRequest(BaseModel):
     user_id: int
@@ -63,7 +69,7 @@ class OrderRequest(BaseModel):
 
 @app.post("/order")
 async def create_order(order: OrderRequest):
-    logger.info("Recibiendo petición de nueva orden")
+    logger.info(f"Recibiendo petición de nueva orden para user_id: {order.user_id}")
     
     # Custom metric increment
     orders_counter.add(1, {"endpoint": "/order"})
@@ -73,22 +79,44 @@ async def create_order(order: OrderRequest):
         if order.quantity <= 0:
             span.record_exception(ValueError("Invalid quantity"))
             span.set_status(trace.status.Status(trace.status.StatusCode.ERROR, "Quantity must be > 0"))
-            logger.error(f"Validación fallida para user_id {order.user_id}: Cantidad inválida.")
+            logger.error(f"✗ Validación fallida para user_id {order.user_id}: Cantidad inválida.")
             raise HTTPException(status_code=400, detail="Quantity must be greater than 0")
         span.set_attribute("user.id", order.user_id)
         span.set_attribute("product.id", order.product_id)
-        logger.info("Validación exitosa")
+        logger.info("✓ Validación exitosa")
 
-    logger.info("Llamando a yyy-service para consultar historial...")
+    logger.info(f"Llamando a yyy-service en: {YYY_SERVICE_URL}/history/{order.user_id}")
     
-    # Call yyy-service
+    # Call yyy-service with detailed error handling
     try:
-        response = requests.get(f"{YYY_SERVICE_URL}/history/{order.user_id}")
+        history_url = f"{YYY_SERVICE_URL}/history/{order.user_id}"
+        logger.info(f"URL completa: {history_url}")
+        
+        response = requests.get(history_url, timeout=10)
+        logger.info(f"Status code de yyy-service: {response.status_code}")
+        
         response.raise_for_status()
         history_data = response.json()
-        logger.info(f"Historial obtenido correctamente de yyy-service: {history_data}")
+        logger.info(f"✓ Historial obtenido correctamente de yyy-service: {history_data}")
+        
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"✗ Error de conexión a yyy-service: {str(e)}")
+        logger.error(f"  URL intentada: {YYY_SERVICE_URL}")
+        logger.error(f"  Verificar que YYY_SERVICE_URL esté correcta")
+        raise HTTPException(status_code=502, detail="Cannot connect to inventory service")
+        
+    except requests.exceptions.Timeout as e:
+        logger.error(f"✗ Timeout conectando a yyy-service: {str(e)}")
+        raise HTTPException(status_code=504, detail="Inventory service timeout")
+        
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"✗ Error HTTP de yyy-service: {str(e)}")
+        logger.error(f"  Status: {response.status_code}")
+        logger.error(f"  Response: {response.text}")
+        raise HTTPException(status_code=response.status_code, detail=response.json().get("detail", "Error from inventory service"))
+        
     except requests.RequestException as e:
-        logger.error(f"Error llamando a yyy-service: {str(e)}")
+        logger.error(f"✗ Error genérico llamando a yyy-service: {str(e)}")
         raise HTTPException(status_code=502, detail="Error communicating with inventory service")
     
     return {"status": "Order created", "history": history_data}
