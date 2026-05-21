@@ -14,6 +14,12 @@ from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExport
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter as GrpcMetricExporter
 from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 
+# Log Exporter Imports
+from opentelemetry._logs import set_logger_provider
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter as GrpcLogExporter
+
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.pymysql import PyMySQLInstrumentor
 from opentelemetry.instrumentation.logging import LoggingInstrumentor
@@ -43,10 +49,17 @@ metric_reader = PeriodicExportingMetricReader(metric_exporter)
 meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
 metrics.set_meter_provider(meter_provider)
 
-# Setup Logging Correlated with Tracing
+# Setup Logging - Export logs via OTLP with trace correlation
 LoggingInstrumentor().instrument(set_logging_format=True)
+log_exporter = GrpcLogExporter(endpoint=otlp_endpoint, insecure=otlp_insecure, headers=headers)
+logger_provider = LoggerProvider(resource=resource)
+logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
+set_logger_provider(logger_provider)
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+handler = LoggingHandler(level=logging.INFO, logger_provider=logger_provider)
+logger.addHandler(handler)
 
 # Setup Cloud SQL Connection
 def get_db_connection():
