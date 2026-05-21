@@ -32,6 +32,11 @@ exporters:
       api-key: "${env:NEW_RELIC_LICENSE_KEY}"  
     compression: gzip
 
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+
 extensions:
   health_check:
     endpoint: 0.0.0.0:13133   
@@ -69,6 +74,7 @@ service:
       - batch
       exporters:
       - otlp/newrelic
+      - otlp/jaeger
 
   telemetry:
     metrics:

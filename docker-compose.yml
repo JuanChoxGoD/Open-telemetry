@@ -5,6 +5,8 @@ services:
     ports:
       - "16686:16686"
       - "14250"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
@@ -14,6 +16,8 @@ services:
     ports:
       - "4317:4317" # OTLP gRPC receiver
       - "4318:4318" # OTLP HTTP receiver
+    environment:
+      - NEW_RELIC_LICENSE_KEY=${NEW_RELIC_LICENSE_KEY}
     depends_on:
       - jaeger
 
